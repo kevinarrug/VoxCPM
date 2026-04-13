@@ -19,3 +19,5 @@ tensorboard: /path/to/logs/finetune_all
 lambdas:
   loss/diff: 1.0
   loss/stop: 1.0
+  # NOTE: tried upweighting loss/stop to 2.0 but it caused training instability;
+  # keeping both at 1.0 for now until I investigate further
