@@ -43,8 +43,10 @@ class VoxCPMModel:
         self.device = torch.device(device)
 
         # Auto-select dtype based on device
+        # Note: using bfloat16 on CUDA instead of float16 for better numerical
+        # stability on Ampere+ GPUs (RTX 3090 / A100 etc.)
         if dtype is None:
-            dtype = torch.float16 if self.device.type == "cuda" else torch.float32
+            dtype = torch.bfloat16 if self.device.type == "cuda" else torch.float32
         self.dtype = dtype
 
         self._model = None
@@ -96,63 +98,4 @@ class VoxCPMModel:
         if waveform.shape[0] > 1:
             waveform = waveform.mean(dim=0, keepdim=True)
 
-        # Resample if necessary
-        if sample_rate != DEFAULT_SAMPLE_RATE:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=sample_rate, new_freq=DEFAULT_SAMPLE_RATE
-            )
-            waveform = resampler(waveform)
-
-        # Truncate to max duration
-        max_samples = int(MAX_AUDIO_DURATION_S * DEFAULT_SAMPLE_RATE)
-        waveform = waveform[:, :max_samples]
-
-        return waveform.squeeze(0)  # shape: (T,)
-
-    # ------------------------------------------------------------------
-    # Inference
-    # ------------------------------------------------------------------
-
-    def transcribe(
-        self,
-        audio: Union[str, Path, torch.Tensor],
-        language: Optional[str] = None,
-        prompt: Optional[str] = None,
-    ) -> str:
-        """Transcribe an audio file or waveform tensor.
-
-        Args:
-            audio: Path to audio file or a pre-loaded 1-D waveform tensor
-                   sampled at 16 kHz.
-            language: Optional BCP-47 language tag (e.g. 'zh', 'en').
-            prompt: Optional text prompt to condition the decoder.
-
-        Returns:
-            Transcription string.
-        """
-        if not self._loaded:
-            self.load()
-
-        if isinstance(audio, (str, Path)):
-            waveform = self._load_audio(audio)
-        else:
-            waveform = audio.float()
-
-        waveform = waveform.to(self.device)
-
-        with torch.inference_mode():
-            text = self._model.transcribe(
-                waveform,
-                tokenizer=self._tokenizer,
-                language=language,
-                prompt=prompt,
-            )
-
-        return text.strip()
-
-    def __repr__(self) -> str:  # pragma: no cover
-        status = "loaded" if self._loaded else "not loaded"
-        return (
-            f"VoxCPMModel(model_dir={self.model_dir!r}, "
-            f"device={self.device}, dtype={self.dtype}, status={status})"
-        )
+        # Resample if nece
